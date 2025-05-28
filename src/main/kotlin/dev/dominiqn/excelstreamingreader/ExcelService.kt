@@ -34,6 +34,8 @@ class ExcelService {
                 val opcPackage = OPCPackage.open(tempFile.pathString)
                 val xssfReader = XSSFReader(opcPackage)
                 val styles = xssfReader.getStylesTable()
+
+                xssfReader.setUseReadOnlySharedStringsTable(true)
                 val shareStringsTable = xssfReader.sharedStringsTable
                 val sheetsIterator = xssfReader.sheetIterator
 
