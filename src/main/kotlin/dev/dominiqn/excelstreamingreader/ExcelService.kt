@@ -69,6 +69,9 @@ class ExcelService {
         }
     }
 
+    /**
+     * 참고: https://svn.apache.org/repos/asf/poi/trunk/poi-examples/src/main/java/org/apache/poi/examples/xssf/eventusermodel/XLSX2CSV.java
+     */
     class SheetHandler(
         private val output: BufferedWriter,
         private val minColumns: Int = -1,
