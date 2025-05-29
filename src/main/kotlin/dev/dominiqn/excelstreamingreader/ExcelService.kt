@@ -13,25 +13,23 @@ import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
 import org.xml.sax.InputSource
 import java.io.BufferedWriter
-import java.io.PrintStream
 import java.nio.file.Files
-import java.nio.file.Paths
-import javax.xml.parsers.ParserConfigurationException
 import kotlin.io.path.pathString
 
 @Service
 class ExcelService {
     fun handleSheet(file: MultipartFile, sheet: String) {
-        val tempFile = Files.createTempFile("excel-streaming-reader-", ".xlsx")
-        val outputFile = Paths.get(System.getProperty("user.home"), "excel-streaming-reader-output.csv")
+        val tempXlsx = Files.createTempFile("excel-streaming-reader-", ".xlsx")
+        val outputCsv = Files.createTempFile("excel-streaming-reader-", ".csv")
 
-        Files.newBufferedWriter(outputFile).use { output ->
+        Files.newBufferedWriter(outputCsv).use { output ->
             try {
                 // buffer로 8192 bytes 사용
                 // 참고: java.io.InputStream.transferTo
-                file.transferTo(tempFile)
+                file.transferTo(tempXlsx)
 
-                val opcPackage = OPCPackage.open(tempFile.pathString)
+                val opcPackage = OPCPackage.open(tempXlsx.pathString)
+//                val opcPackage = OPCPackage.open(file.inputStream)
                 val xssfReader = XSSFReader(opcPackage)
                 val styles = xssfReader.getStylesTable()
 
@@ -64,7 +62,7 @@ class ExcelService {
                 }
 
             } finally {
-                Files.deleteIfExists(tempFile)
+                Files.deleteIfExists(tempXlsx)
             }
         }
     }

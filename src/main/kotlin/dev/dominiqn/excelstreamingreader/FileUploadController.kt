@@ -15,7 +15,10 @@ class FileUploadController(
 
     @ResponseBody
     @PostMapping("/upload")
-    fun handleFileUpload(@RequestParam("file") file: MultipartFile) {
-        excelService.handleSheet(file, "Worksheet")
+    fun handleFileUpload(
+        @RequestParam("file") file: MultipartFile,
+        @RequestParam("sheet") sheet: String,
+    ) {
+        excelService.handleSheet(file, sheet)
     }
 }
