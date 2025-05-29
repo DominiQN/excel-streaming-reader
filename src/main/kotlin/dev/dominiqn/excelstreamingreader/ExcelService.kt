@@ -9,62 +9,78 @@ import org.apache.poi.xssf.eventusermodel.XSSFReader
 import org.apache.poi.xssf.eventusermodel.XSSFSheetXMLHandler
 import org.apache.poi.xssf.eventusermodel.XSSFSheetXMLHandler.SheetContentsHandler
 import org.apache.poi.xssf.usermodel.XSSFComment
+import org.springframework.http.HttpHeaders
+import org.springframework.http.MediaType
+import org.springframework.http.ResponseEntity
 import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody
 import org.xml.sax.InputSource
 import java.io.BufferedWriter
+import java.io.OutputStreamWriter
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import kotlin.io.path.pathString
 
 @Service
 class ExcelService {
-    fun handleSheet(file: MultipartFile, sheet: String) {
-        val tempXlsx = Files.createTempFile("excel-streaming-reader-", ".xlsx")
-        val outputCsv = Files.createTempFile("excel-streaming-reader-", ".csv")
+    fun handleSheet(file: MultipartFile, sheet: String): ResponseEntity<StreamingResponseBody> {
+        // Create a streaming response
+        val responseBody = StreamingResponseBody { outputStream ->
+            val tempXlsx = Files.createTempFile("excel-streaming-reader-", ".xlsx")
 
-        Files.newBufferedWriter(outputCsv).use { output ->
             try {
-                // buffer로 8192 bytes 사용
-                // 참고: java.io.InputStream.transferTo
-                file.transferTo(tempXlsx)
+                // Create a buffered writer that writes directly to the response output stream
+                OutputStreamWriter(outputStream, StandardCharsets.UTF_8).buffered().use { output ->
+                    // buffer로 8192 bytes 사용
+                    // 참고: java.io.InputStream.transferTo
+                    file.transferTo(tempXlsx)
 
-                val opcPackage = OPCPackage.open(tempXlsx.pathString)
-//                val opcPackage = OPCPackage.open(file.inputStream)
-                val xssfReader = XSSFReader(opcPackage)
-                val styles = xssfReader.getStylesTable()
+                    val opcPackage = OPCPackage.open(tempXlsx.pathString)
+                    val xssfReader = XSSFReader(opcPackage)
+                    val styles = xssfReader.getStylesTable()
 
-                xssfReader.setUseReadOnlySharedStringsTable(true)
-                val shareStringsTable = xssfReader.sharedStringsTable
-                val sheetsIterator = xssfReader.sheetIterator
+                    xssfReader.setUseReadOnlySharedStringsTable(true)
+                    val shareStringsTable = xssfReader.sharedStringsTable
+                    val sheetsIterator = xssfReader.sheetIterator
 
-                while (sheetsIterator.hasNext()) {
-                    sheetsIterator.next().use { sheetInputStream ->
-                        if (sheetsIterator.sheetName != sheet) {
-                            println("sheetName: ${sheetsIterator.sheetName} != $sheet, skip this sheet")
-                            return@use
+                    while (sheetsIterator.hasNext()) {
+                        sheetsIterator.next().use { sheetInputStream ->
+                            if (sheetsIterator.sheetName != sheet) {
+                                println("sheetName: ${sheetsIterator.sheetName} != $sheet, skip this sheet")
+                                return@use
+                            }
+
+                            val formatter = DataFormatter(true)
+                            val sheetSource = InputSource(sheetInputStream)
+
+                            val parser = XMLHelper.newXMLReader()
+                            val contentHandler = XSSFSheetXMLHandler(
+                                styles,
+                                null,
+                                shareStringsTable,
+                                SheetHandler(output),
+                                formatter,
+                                false,
+                            )
+                            parser.contentHandler = contentHandler
+                            parser.parse(sheetSource)
                         }
-
-                        val formatter = DataFormatter(true)
-                        val sheetSource = InputSource(sheetInputStream)
-
-                        val parser = XMLHelper.newXMLReader()
-                        val contentHandler = XSSFSheetXMLHandler(
-                            styles,
-                            null,
-                            shareStringsTable,
-                            SheetHandler(output),
-                            formatter,
-                            false,
-                        )
-                        parser.contentHandler = contentHandler
-                        parser.parse(sheetSource)
                     }
                 }
-
             } finally {
                 Files.deleteIfExists(tempXlsx)
             }
         }
+
+        // Set up response headers
+        val headers = HttpHeaders()
+        headers.contentType = MediaType.parseMediaType("text/csv")
+        headers.set(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"${file.originalFilename?.replace(".xlsx", ".csv") ?: "export.csv"}\"")
+
+        return ResponseEntity.ok()
+            .headers(headers)
+            .body(responseBody)
     }
 
     /**
